@@ -330,6 +330,11 @@ export async function saveSettingsAction(
   const values: Record<string, string> = {};
   for (const def of getSettingDefs()) {
     values[def.key] = String(formData.get(def.key) ?? "");
+    if (def.type === "social" && def.enabledKey) {
+      const raw = formData.get(def.enabledKey);
+      values[def.enabledKey] =
+        raw === "1" || raw === "on" || raw === "true" ? "1" : "0";
+    }
   }
 
   try {

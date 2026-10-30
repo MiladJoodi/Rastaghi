@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveSettingsAction } from "@/app/admin/actions";
@@ -13,6 +13,179 @@ type SettingsFormProps = {
   defs: SettingDef[];
   values: Record<string, string>;
 };
+
+function SettingsImageField({
+  def,
+  initialValue,
+}: {
+  def: SettingDef;
+  initialValue: string;
+}) {
+  const inputId = useId();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const clearable = Boolean(def.clearable);
+  const [url, setUrl] = useState(() =>
+    clearable ? initialValue : initialValue || def.defaultValue,
+  );
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const preview = def.preview ?? "portrait";
+  const previewClass = `admin-settings-image-preview admin-settings-image-preview--${preview}`;
+
+  async function uploadFile(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("kind", "image");
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "آپلود ناموفق بود.");
+      }
+      setUrl(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "آپلود ناموفق بود.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="admin-settings-field admin-settings-image-field">
+      <span className="admin-settings-label" id={`${inputId}-label`}>
+        {def.label}
+      </span>
+      <input type="hidden" name={def.key} value={url} />
+      <div className="admin-settings-image-row">
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className={previewClass} />
+        ) : (
+          <div
+            className={`${previewClass} admin-settings-image-preview--empty`}
+            aria-hidden
+          />
+        )}
+        <div className="admin-settings-image-actions">
+          <input
+            ref={fileRef}
+            id={inputId}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={uploading}
+            aria-labelledby={`${inputId}-label`}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadFile(file);
+            }}
+          />
+          <button
+            type="button"
+            className="admin-text-btn"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? "در حال آپلود…" : "انتخاب تصویر"}
+          </button>
+          {clearable && url ? (
+            <button
+              type="button"
+              className="admin-text-btn admin-text-btn-danger"
+              disabled={uploading}
+              onClick={() => {
+                setUrl("");
+                setError("");
+              }}
+            >
+              حذف
+            </button>
+          ) : null}
+          {!clearable && url && url !== def.defaultValue ? (
+            <button
+              type="button"
+              className="admin-text-btn"
+              disabled={uploading}
+              onClick={() => {
+                setUrl(def.defaultValue);
+                setError("");
+              }}
+            >
+              بازگشت به پیش‌فرض
+            </button>
+          ) : null}
+          {clearable && !url && def.defaultValue ? (
+            <button
+              type="button"
+              className="admin-text-btn"
+              disabled={uploading}
+              onClick={() => {
+                setUrl(def.defaultValue);
+                setError("");
+              }}
+            >
+              بازگردانی پیش‌فرض
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {error ? (
+        <p className="admin-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SettingsSocialField({
+  def,
+  initialUrl,
+  initialEnabled,
+}: {
+  def: SettingDef;
+  initialUrl: string;
+  initialEnabled: boolean;
+}) {
+  const inputId = useId();
+  const enabledKey = def.enabledKey ?? `${def.key}_enabled`;
+
+  return (
+    <div className="admin-settings-field admin-settings-social-field">
+      <div className="admin-settings-social-row">
+        <input
+          type="checkbox"
+          name={enabledKey}
+          value="1"
+          defaultChecked={initialEnabled}
+          className="admin-settings-social-check"
+          aria-label={`نمایش ${def.label}`}
+          title="روشن / خاموش"
+        />
+        <label className="admin-settings-label" htmlFor={inputId}>
+          {def.label}
+        </label>
+        <input
+          id={inputId}
+          name={def.key}
+          type="text"
+          dir="ltr"
+          className="admin-settings-social-url latin-digits"
+          defaultValue={initialUrl}
+          placeholder={def.placeholder ?? "@username"}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function SettingsForm({ defs, values }: SettingsFormProps) {
   const router = useRouter();
@@ -54,39 +227,60 @@ export function SettingsForm({ defs, values }: SettingsFormProps) {
         <details key={group} className="admin-settings-group">
           <summary className="admin-settings-group-summary">{group}</summary>
           <div className="admin-settings-group-body">
-            {items.map((def) => (
-              <label key={def.key} className="admin-settings-field">
-                <span className="admin-settings-label">{def.label}</span>
-                {def.type === "select" ? (
-                  <select
-                    name={def.key}
-                    defaultValue={values[def.key] ?? def.defaultValue}
-                  >
-                    {(def.options ?? []).map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : def.type === "textarea" ? (
-                  <textarea
-                    name={def.key}
-                    rows={8}
-                    defaultValue={values[def.key] ?? def.defaultValue}
-                    placeholder={def.defaultValue}
-                    autoComplete="off"
-                  />
-                ) : (
-                  <input
-                    name={def.key}
-                    type="text"
-                    defaultValue={values[def.key] ?? def.defaultValue}
-                    placeholder={def.defaultValue}
-                    autoComplete="off"
-                  />
-                )}
-              </label>
-            ))}
+            {items.map((def) =>
+              def.type === "image" ? (
+                <SettingsImageField
+                  key={def.key}
+                  def={def}
+                  initialValue={
+                    values[def.key] !== undefined
+                      ? values[def.key]!
+                      : def.defaultValue
+                  }
+                />
+              ) : def.type === "social" ? (
+                <SettingsSocialField
+                  key={def.key}
+                  def={def}
+                  initialUrl={values[def.key] ?? ""}
+                  initialEnabled={
+                    (values[def.enabledKey ?? ""] ?? "1") === "1"
+                  }
+                />
+              ) : (
+                <label key={def.key} className="admin-settings-field">
+                  <span className="admin-settings-label">{def.label}</span>
+                  {def.type === "select" ? (
+                    <select
+                      name={def.key}
+                      defaultValue={values[def.key] ?? def.defaultValue}
+                    >
+                      {(def.options ?? []).map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : def.type === "textarea" ? (
+                    <textarea
+                      name={def.key}
+                      rows={8}
+                      defaultValue={values[def.key] ?? def.defaultValue}
+                      placeholder={def.defaultValue}
+                      autoComplete="off"
+                    />
+                  ) : (
+                    <input
+                      name={def.key}
+                      type="text"
+                      defaultValue={values[def.key] ?? def.defaultValue}
+                      placeholder={def.defaultValue}
+                      autoComplete="off"
+                    />
+                  )}
+                </label>
+              ),
+            )}
           </div>
         </details>
       ))}

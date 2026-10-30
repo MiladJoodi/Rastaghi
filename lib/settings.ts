@@ -1,8 +1,39 @@
 import { unstable_cache } from "next/cache";
+import {
+  CONTACT_SOCIAL_NETWORKS,
+  contactSocialEnabledKey,
+  contactSocialUrlKey,
+  pickContactSocialLinks,
+  type ContactSocialId,
+  type ContactSocialLink,
+} from "@/lib/contact-social";
 import { DEFAULT_FONT_ID, listFontOptions, resolveFontId } from "@/lib/fonts/catalog";
 import { hasDatabaseUrl, sql } from "@/lib/db";
 
 export type SettingOption = { value: string; label: string };
+
+const CONTACT_SOCIAL_SETTING_DEFS = CONTACT_SOCIAL_NETWORKS.flatMap(
+  (network) => [
+    {
+      key: contactSocialUrlKey(network.id),
+      label: network.label,
+      group: "راه‌های ارتباطی",
+      defaultValue: "",
+      type: "social" as const,
+      network: network.id,
+      placeholder: network.placeholder,
+      enabledKey: contactSocialEnabledKey(network.id),
+      clearable: true,
+    },
+    {
+      key: contactSocialEnabledKey(network.id),
+      label: `${network.label} — نمایش`,
+      group: "راه‌های ارتباطی",
+      defaultValue: "1",
+      type: "social_enabled" as const,
+    },
+  ],
+);
 
 /**
  * Registry of editable site settings.
@@ -33,6 +64,32 @@ export const SETTING_DEFS = [
     type: "text" as const,
   },
   {
+    key: "home.header_avatar",
+    label: "عکس دایره‌ای هدر",
+    group: "صفحه اصلی",
+    defaultValue: "/img/me.png",
+    type: "image" as const,
+    preview: "avatar" as const,
+    clearable: true,
+  },
+  {
+    key: "home.hero_cover",
+    label: "عکس کاور بنر",
+    group: "صفحه اصلی",
+    defaultValue: "/01.jpg",
+    type: "image" as const,
+    preview: "cover" as const,
+    clearable: true,
+  },
+  {
+    key: "home.hero_portrait",
+    label: "عکس پرتره هیرو",
+    group: "صفحه اصلی",
+    defaultValue: "/img/me.png",
+    type: "image" as const,
+    preview: "portrait" as const,
+  },
+  {
     key: "home.featured_title",
     label: "عنوان برگزیده‌ها",
     group: "صفحه اصلی",
@@ -53,6 +110,7 @@ export const SETTING_DEFS = [
     defaultValue: CONTACT_BODY_DEFAULT,
     type: "textarea" as const,
   },
+  ...CONTACT_SOCIAL_SETTING_DEFS,
   {
     key: "font.header",
     label: "فونت هدر",
@@ -98,20 +156,38 @@ export function resolveCommentMode(raw: string | undefined | null): CommentMode 
 
 export type SettingKey = (typeof SETTING_DEFS)[number]["key"];
 
+export type SettingImagePreview = "avatar" | "cover" | "portrait";
+
 export type SettingDef = {
   key: string;
   label: string;
   group: string;
   defaultValue: string;
-  type?: "text" | "textarea" | "select";
+  type?:
+    | "text"
+    | "textarea"
+    | "select"
+    | "image"
+    | "social"
+    | "social_enabled";
   options?: SettingOption[];
+  /** Image field preview shape in admin UI */
+  preview?: SettingImagePreview;
+  /** Allow empty value (e.g. hide header avatar) */
+  clearable?: boolean;
+  network?: ContactSocialId;
+  placeholder?: string;
+  enabledKey?: string;
 };
 
 const FONT_KEYS = new Set<string>(["font.header", "font.heading", "font.body"]);
 
 export function getSettingDefs(): SettingDef[] {
   const fontOptions = listFontOptions();
-  return SETTING_DEFS.map((d) => {
+  return SETTING_DEFS.flatMap((d) => {
+    // Companion enabled flags are saved with social fields; hide from UI list.
+    if (d.type === "social_enabled") return [];
+
     const base: SettingDef = {
       key: d.key,
       label: d.label,
@@ -119,6 +195,21 @@ export function getSettingDefs(): SettingDef[] {
       defaultValue: d.defaultValue,
       type: d.type,
     };
+    if ("preview" in d && d.preview) {
+      base.preview = d.preview;
+    }
+    if ("clearable" in d && d.clearable) {
+      base.clearable = true;
+    }
+    if ("network" in d && d.network) {
+      base.network = d.network;
+    }
+    if ("placeholder" in d && d.placeholder) {
+      base.placeholder = d.placeholder;
+    }
+    if ("enabledKey" in d && d.enabledKey) {
+      base.enabledKey = d.enabledKey;
+    }
     if (d.type === "select") {
       if ("options" in d && d.options) {
         base.options = [...d.options];
@@ -126,7 +217,7 @@ export function getSettingDefs(): SettingDef[] {
         base.options = fontOptions;
       }
     }
-    return base;
+    return [base];
   });
 }
 
@@ -167,7 +258,7 @@ async function loadSettingsMap(): Promise<Record<string, string>> {
   return map;
 }
 
-const getSettingsMapCached = unstable_cache(loadSettingsMap, ["site-settings-map"], {
+const getSettingsMapCached = unstable_cache(loadSettingsMap, ["site-settings-map-v2"], {
   revalidate: 60,
   tags: ["settings"],
 });
@@ -192,10 +283,22 @@ export async function setSettings(
 
   const allowed = new Set(SETTING_DEFS.map((d) => d.key));
   for (const [key, raw] of Object.entries(values)) {
-    if (!allowed.has(key as SettingKey)) continue;
+    if (!allowed.has(key)) continue;
     const value = String(raw ?? "").trim();
     const def = SETTING_DEFS.find((d) => d.key === key);
-    let next = value || def?.defaultValue || "";
+    const clearable = Boolean(
+      def &&
+        (("clearable" in def && def.clearable) ||
+          def.type === "social" ||
+          def.type === "social_enabled"),
+    );
+    let next = value;
+    if (!next && !clearable) {
+      next = def?.defaultValue || "";
+    }
+    if (def?.type === "social_enabled") {
+      next = next === "1" ? "1" : "0";
+    }
     if (FONT_KEYS.has(key)) {
       next = resolveFontId(next);
     }
@@ -215,4 +318,9 @@ export async function setSettings(
 export async function getCommentMode(): Promise<CommentMode> {
   const map = await getSettingsMap();
   return resolveCommentMode(map["comments.mode"]);
+}
+
+export async function getContactSocialLinks(): Promise<ContactSocialLink[]> {
+  const map = await getSettingsMap();
+  return pickContactSocialLinks(map);
 }

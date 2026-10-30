@@ -6,11 +6,17 @@ type HomeHeroProps = {
 };
 
 export function HomeHero({ hero }: HomeHeroProps) {
+  const coverStyle = hero.cover
+    ? ({ ["--hero-cover" as string]: `url(${hero.cover})` } as React.CSSProperties)
+    : undefined;
+
   return (
     <section
-      className="home-shahin-hero"
+      className={
+        hero.cover ? "home-shahin-hero home-shahin-hero--cover" : "home-shahin-hero"
+      }
       aria-label="معرفی"
-      style={{ ["--hero-pattern" as string]: `url(${hero.pattern})` }}
+      style={coverStyle}
     >
       <div className="home-shahin-hero-inner">
         <div className="home-shahin-portrait-wrap">

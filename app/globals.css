@@ -2586,6 +2586,52 @@ button.admin-comment-approve:hover {
   line-height: 1.55;
 }
 
+.admin-settings-image-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-settings-image-preview {
+  display: block;
+  object-fit: cover;
+  object-position: center center;
+  border: 1px solid var(--hs-line);
+  border-radius: calc(var(--border-radius) - 1px);
+  background: var(--hs-bg);
+  flex-shrink: 0;
+}
+
+.admin-settings-image-preview--portrait {
+  width: 7.5rem;
+  height: 10rem;
+  object-position: top center;
+}
+
+.admin-settings-image-preview--avatar {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999px;
+}
+
+.admin-settings-image-preview--cover {
+  width: min(18rem, 100%);
+  height: 5.5rem;
+  object-position: center center;
+}
+
+.admin-settings-image-preview--empty {
+  background: color-mix(in oklch, var(--text) 6%, var(--hs-bg));
+}
+
+.admin-settings-image-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45em;
+}
+
 .admin-settings-actions {
   display: flex;
   align-items: center;
@@ -4714,6 +4760,100 @@ a.is-navigating {
   margin-bottom: 1.75em;
 }
 
+.contact-socials {
+  margin-top: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.contact-socials-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.contact-social-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 4.75rem;
+  padding: 0.65rem 0.7rem 0.55rem;
+  border: 1px solid var(--hs-line);
+  border-radius: calc(var(--border-radius) + 4px);
+  color: var(--hs-fg);
+  text-decoration: none;
+  background: var(--hs-surface);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.contact-social-link:hover {
+  background: var(--hs-soft);
+  border-color: var(--hs-frame);
+  transform: translateY(-1px);
+}
+
+.contact-social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.contact-social-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.contact-social-link--x .contact-social-icon {
+  color: var(--hs-fg);
+  padding: 0.15rem;
+}
+
+.contact-social-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.admin-settings-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.admin-settings-social-check {
+  width: auto !important;
+  max-width: none !important;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: hsl(var(--hue), 55%, 42%);
+  cursor: pointer;
+}
+
+.admin-settings-social-row .admin-settings-label {
+  flex-shrink: 0;
+  min-width: 5.5rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.admin-settings-social-url {
+  flex: 1 1 12rem;
+  width: auto;
+  max-width: 22rem;
+  margin: 0;
+}
+
 .contact-form {
   margin-top: 2.25rem;
   padding-top: 1.5rem;
@@ -5399,14 +5539,14 @@ body:has(.home-shahin) {
   background-color: var(--hs-hero-wash);
 }
 
-.home-shahin-hero::before {
+.home-shahin-hero--cover::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: var(--hero-pattern);
-  background-repeat: repeat-x;
+  background-image: var(--hero-cover);
+  background-repeat: no-repeat;
   background-position: center center;
-  background-size: auto 100%;
+  background-size: cover;
   opacity: 0.42;
   pointer-events: none;
 }

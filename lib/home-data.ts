@@ -23,21 +23,26 @@ export type HomeHeroContent = {
   name: string;
   tagline: string;
   portrait: string;
-  pattern: string;
+  /** Hero cover / background; empty = no cover image */
+  cover: string;
+  /** Circular header avatar; empty = hidden */
   avatar: string;
 };
 
 export async function getHomeHero(): Promise<HomeHeroContent> {
-  const [name, tagline] = await Promise.all([
+  const [name, tagline, portrait, cover, avatar] = await Promise.all([
     getSetting("home.hero_name"),
     getSetting("home.hero_tagline"),
+    getSetting("home.hero_portrait"),
+    getSetting("home.hero_cover"),
+    getSetting("home.header_avatar"),
   ]);
   return {
     name: name.trim() || homeHeroDefaults.name,
     tagline: tagline.trim() || homeHeroDefaults.tagline,
-    portrait: homeHeroDefaults.portrait,
-    pattern: homeHeroDefaults.pattern,
-    avatar: homeHeroDefaults.avatar,
+    portrait: portrait.trim() || homeHeroDefaults.portrait,
+    cover: cover.trim(),
+    avatar: avatar.trim(),
   };
 }
 

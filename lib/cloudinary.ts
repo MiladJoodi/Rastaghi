@@ -223,12 +223,18 @@ const AUDIO_FORMATS = new Set([
   "wma",
 ]);
 
-/** Soft quota for admin UI (bytes). Override with CLOUDINARY_STORAGE_LIMIT_GB. */
-export function getCloudinaryQuotaBytes(): number {
+const GIB = 1024 * 1024 * 1024;
+
+/**
+ * Optional soft quota override (bytes).
+ * When set, admin UI uses this instead of Cloudinary plan limits.
+ */
+export function getCloudinaryQuotaBytesOverride(): number | null {
   const raw = process.env.CLOUDINARY_STORAGE_LIMIT_GB?.trim();
-  const gb = raw ? Number(raw) : 10;
-  if (!Number.isFinite(gb) || gb <= 0) return 10 * 1024 * 1024 * 1024;
-  return gb * 1024 * 1024 * 1024;
+  if (!raw) return null;
+  const gb = Number(raw);
+  if (!Number.isFinite(gb) || gb <= 0) return null;
+  return gb * GIB;
 }
 
 export function cloudinaryFolder(): string {
@@ -237,26 +243,94 @@ export function cloudinaryFolder(): string {
 
 export type CloudinaryUsageSummary = {
   usedBytes: number;
-  quotaBytes: number;
-  /** 0–100 */
+  /** 0–100 of the active plan metric */
   usedPercent: number;
+  mode: "bytes" | "credits";
+  /** Byte ceiling when mode is "bytes" */
+  quotaBytes: number | null;
+  /** Credit usage when mode is "credits" */
+  creditsUsage: number | null;
+  creditsLimit: number | null;
+  plan: string | null;
 };
+
+function roundPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value * 10) / 10));
+}
 
 export async function getCloudinaryUsage(): Promise<CloudinaryUsageSummary> {
   if (!isCloudinaryConfigured()) {
     throw new Error("Cloudinary پیکربندی نشده است.");
   }
   configure();
-  const quotaBytes = getCloudinaryQuotaBytes();
   const usage = (await cloudinary.api.usage()) as {
-    storage?: { usage?: number };
+    plan?: string;
+    storage?: { usage?: number; limit?: number; used_percent?: number };
+    credits?: { usage?: number; limit?: number; used_percent?: number };
   };
+
   const usedBytes = Number(usage.storage?.usage) || 0;
-  const usedPercent = Math.min(
-    100,
-    Math.round((usedBytes / quotaBytes) * 1000) / 10,
-  );
-  return { usedBytes, quotaBytes, usedPercent };
+  const plan = usage.plan?.trim() || null;
+  const overrideQuota = getCloudinaryQuotaBytesOverride();
+
+  if (overrideQuota != null) {
+    return {
+      usedBytes,
+      quotaBytes: overrideQuota,
+      usedPercent: roundPercent((usedBytes / overrideQuota) * 100),
+      mode: "bytes",
+      creditsUsage: null,
+      creditsLimit: null,
+      plan,
+    };
+  }
+
+  const storageLimit = Number(usage.storage?.limit);
+  if (Number.isFinite(storageLimit) && storageLimit > 0) {
+    const apiPct = Number(usage.storage?.used_percent);
+    return {
+      usedBytes,
+      quotaBytes: storageLimit,
+      usedPercent: Number.isFinite(apiPct)
+        ? roundPercent(apiPct)
+        : roundPercent((usedBytes / storageLimit) * 100),
+      mode: "bytes",
+      creditsUsage: null,
+      creditsLimit: null,
+      plan,
+    };
+  }
+
+  const creditsLimit = Number(usage.credits?.limit);
+  const creditsUsage = Number(usage.credits?.usage);
+  if (Number.isFinite(creditsLimit) && creditsLimit > 0) {
+    const apiPct = Number(usage.credits?.used_percent);
+    const used =
+      Number.isFinite(creditsUsage) && creditsUsage >= 0 ? creditsUsage : 0;
+    return {
+      usedBytes,
+      quotaBytes: null,
+      usedPercent: Number.isFinite(apiPct)
+        ? roundPercent(apiPct)
+        : roundPercent((used / creditsLimit) * 100),
+      mode: "credits",
+      creditsUsage: used,
+      creditsLimit,
+      plan,
+    };
+  }
+
+  // Last resort: treat 1 credit ≈ 1 GiB if we somehow only have storage bytes
+  const fallbackQuota = 25 * GIB;
+  return {
+    usedBytes,
+    quotaBytes: fallbackQuota,
+    usedPercent: roundPercent((usedBytes / fallbackQuota) * 100),
+    mode: "bytes",
+    creditsUsage: null,
+    creditsLimit: null,
+    plan,
+  };
 }
 
 export type CloudinaryMediaItem = {
