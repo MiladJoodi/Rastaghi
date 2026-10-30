@@ -1,5 +1,10 @@
 export const CONTACT_SOCIAL_NETWORKS = [
   {
+    id: "email",
+    label: "ایمیل",
+    placeholder: "mohammad@rastaghi.ir",
+  },
+  {
     id: "telegram",
     label: "تلگرام",
     placeholder: "@mohammad_rastaghi",
@@ -54,6 +59,15 @@ function extractPathAfterHost(value: string, hosts: string[]): string | null {
   return null;
 }
 
+function resolveEmailHref(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  if (/^mailto:/i.test(value)) return value;
+  const address = value.replace(/^mailto:/i, "").trim();
+  if (!address.includes("@")) return "";
+  return `mailto:${address}`;
+}
+
 /** Build a clickable profile / chat URL from a stored handle, phone, or full URL. */
 export function resolveSocialHref(
   id: ContactSocialId,
@@ -61,6 +75,10 @@ export function resolveSocialHref(
 ): string {
   const value = raw.trim();
   if (!value) return "";
+
+  if (id === "email") {
+    return resolveEmailHref(value);
+  }
 
   if (id === "whatsapp") {
     if (/^https?:\/\//i.test(value) || value.startsWith("//")) {
@@ -78,7 +96,7 @@ export function resolveSocialHref(
     return `https:${value}`;
   }
 
-  const hosts: Record<ContactSocialId, string[]> = {
+  const hosts: Record<Exclude<ContactSocialId, "email">, string[]> = {
     telegram: ["t.me/", "telegram.me/", "telegram.dog/"],
     instagram: ["instagram.com/", "www.instagram.com/"],
     whatsapp: ["wa.me/", "api.whatsapp.com/"],

@@ -1,4 +1,5 @@
 import {
+  EmailIcon,
   InstagramIcon,
   TelegramIcon,
   WhatsAppIcon,
@@ -12,6 +13,8 @@ type ContactSocialLinksProps = {
 
 function SocialIcon({ id }: { id: ContactSocialLink["id"] }) {
   switch (id) {
+    case "email":
+      return <EmailIcon size={44} aria-hidden />;
     case "telegram":
       return <TelegramIcon size={44} aria-hidden />;
     case "instagram":
@@ -31,23 +34,26 @@ export function ContactSocialLinks({ links }: ContactSocialLinksProps) {
   return (
     <nav className="contact-socials" aria-label="راه‌های ارتباطی">
       <ul className="contact-socials-list">
-        {links.map((link) => (
-          <li key={link.id}>
-            <a
-              href={link.href}
-              className={`contact-social-link contact-social-link--${link.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={link.label}
-              aria-label={link.label}
-            >
-              <span className="contact-social-icon" aria-hidden>
-                <SocialIcon id={link.id} />
-              </span>
-              <span className="contact-social-label">{link.label}</span>
-            </a>
-          </li>
-        ))}
+        {links.map((link) => {
+          const isMail = link.id === "email";
+          return (
+            <li key={link.id}>
+              <a
+                href={link.href}
+                className={`contact-social-link contact-social-link--${link.id}`}
+                target={isMail ? undefined : "_blank"}
+                rel={isMail ? undefined : "noopener noreferrer"}
+                title={link.label}
+                aria-label={link.label}
+              >
+                <span className="contact-social-icon" aria-hidden>
+                  <SocialIcon id={link.id} />
+                </span>
+                <span className="contact-social-label">{link.label}</span>
+              </a>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );
