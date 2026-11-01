@@ -30,7 +30,7 @@ const ALLOWED_TYPES: Record<MediaKind, Set<string>> = {
 
 export const CLOUDINARY_MAX_BYTES: Record<MediaKind, number> = {
   image: 8 * 1024 * 1024,
-  audio: 25 * 1024 * 1024,
+  audio: 100 * 1024 * 1024,
   video: 100 * 1024 * 1024,
 };
 
@@ -42,7 +42,7 @@ const KIND_LABEL: Record<MediaKind, string> = {
 
 const KIND_LIMIT_LABEL: Record<MediaKind, string> = {
   image: "۸ مگابایت",
-  audio: "۲۵ مگابایت",
+  audio: "۱۰۰ مگابایت",
   video: "۱۰۰ مگابایت",
 };
 
