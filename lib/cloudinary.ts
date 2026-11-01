@@ -1,6 +1,17 @@
 import { v2 as cloudinary } from "cloudinary";
+import {
+  assertMediaSize,
+  cloudinaryResourceType,
+  MEDIA_MAX_BYTES,
+  parseMediaKind,
+  type MediaKind,
+} from "@/lib/media-limits";
 
-export type MediaKind = "image" | "audio" | "video";
+export type { MediaKind };
+export {
+  MEDIA_MAX_BYTES as CLOUDINARY_MAX_BYTES,
+  parseMediaKind,
+};
 
 const ALLOWED_TYPES: Record<MediaKind, Set<string>> = {
   image: new Set([
@@ -28,24 +39,6 @@ const ALLOWED_TYPES: Record<MediaKind, Set<string>> = {
   ]),
 };
 
-export const CLOUDINARY_MAX_BYTES: Record<MediaKind, number> = {
-  image: 8 * 1024 * 1024,
-  audio: 100 * 1024 * 1024,
-  video: 100 * 1024 * 1024,
-};
-
-const KIND_LABEL: Record<MediaKind, string> = {
-  image: "تصویر",
-  audio: "صوت",
-  video: "ویدیو",
-};
-
-const KIND_LIMIT_LABEL: Record<MediaKind, string> = {
-  image: "۸ مگابایت",
-  audio: "۱۰۰ مگابایت",
-  video: "۱۰۰ مگابایت",
-};
-
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -69,13 +62,6 @@ function configure() {
     api_secret: requireEnv("CLOUDINARY_API_SECRET"),
     secure: true,
   });
-}
-
-export function parseMediaKind(value: unknown): MediaKind | null {
-  if (value === "image" || value === "audio" || value === "video") {
-    return value;
-  }
-  return null;
 }
 
 function mimeFromExtension(file: File): string {
@@ -123,12 +109,7 @@ export function assertAllowedMedia(file: File, kind: MediaKind) {
     }
     throw new Error("فقط MP4، WebM یا MOV مجاز است.");
   }
-  const max = CLOUDINARY_MAX_BYTES[kind];
-  if (file.size <= 0 || file.size > max) {
-    throw new Error(
-      `حجم ${KIND_LABEL[kind]} باید کمتر از ${KIND_LIMIT_LABEL[kind]} باشد.`,
-    );
-  }
+  assertMediaSize(file.size, kind);
 }
 
 /** @deprecated Prefer assertAllowedMedia(file, "image") */
@@ -155,10 +136,9 @@ export async function uploadMediaToCloudinary(
   assertAllowedMedia(file, kind);
   configure();
 
-  const folder = process.env.CLOUDINARY_FOLDER?.trim() || "rastaghi";
+  const folder = cloudinaryFolder();
   const bytes = Buffer.from(await file.arrayBuffer());
-  // Cloudinary stores audio under the video resource type.
-  const resourceType = kind === "image" ? "image" : "video";
+  const resourceType = cloudinaryResourceType(kind);
 
   const result = await new Promise<{
     secure_url: string;
@@ -239,6 +219,42 @@ export function getCloudinaryQuotaBytesOverride(): number | null {
 
 export function cloudinaryFolder(): string {
   return process.env.CLOUDINARY_FOLDER?.trim() || "rastaghi";
+}
+
+export type CloudinaryBrowserUploadSign = {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  resourceType: "image" | "video";
+};
+
+/** Signed params for direct browser → Cloudinary upload (real XHR progress). */
+export function createCloudinaryBrowserUploadSign(
+  kind: MediaKind,
+): CloudinaryBrowserUploadSign {
+  if (!isCloudinaryConfigured()) {
+    throw new Error("Cloudinary پیکربندی نشده است.");
+  }
+  configure();
+  const cloudName = requireEnv("CLOUDINARY_CLOUD_NAME");
+  const apiKey = requireEnv("CLOUDINARY_API_KEY");
+  const apiSecret = requireEnv("CLOUDINARY_API_SECRET");
+  const folder = cloudinaryFolder();
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = cloudinary.utils.api_sign_request(
+    { timestamp, folder },
+    apiSecret,
+  );
+  return {
+    cloudName,
+    apiKey,
+    timestamp,
+    signature,
+    folder,
+    resourceType: cloudinaryResourceType(kind),
+  };
 }
 
 export type CloudinaryUsageSummary = {

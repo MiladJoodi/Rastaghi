@@ -68,10 +68,22 @@ export function applyThemePref(pref: ThemePref): void {
   window.dispatchEvent(new Event("themechange"));
 }
 
+/**
+ * Cycle system → light → dark, but skip steps that look the same as now
+ * (e.g. dark → system while OS is dark would be a no-op click).
+ */
 export function nextThemePref(current: ThemePref): ThemePref {
-  if (current === "system") return "light";
-  if (current === "light") return "dark";
-  return "system";
+  const order: ThemePref[] = ["system", "light", "dark"];
+  const start = order.indexOf(current);
+  const from = start >= 0 ? start : 0;
+  const currentDark = resolveDark(current);
+
+  for (let step = 1; step <= order.length; step++) {
+    const next = order[(from + step) % order.length]!;
+    if (resolveDark(next) !== currentDark) return next;
+  }
+
+  return currentDark ? "light" : "dark";
 }
 
 export function themePrefLabel(pref: ThemePref): string {

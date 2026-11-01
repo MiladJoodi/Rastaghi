@@ -741,10 +741,6 @@ blockquote {
   line-height: 0;
 }
 
-.admin-nav-desktop .theme-toggle {
-  margin-inline-end: 0.15em;
-}
-
 .admin-nav-mobile .theme-toggle-menu,
 .admin-nav-mobile .admin-nav-item,
 .admin-nav-mobile .admin-link-btn.admin-nav-item,
@@ -1739,16 +1735,17 @@ body:has(.admin-root) {
   color: var(--hs-fg);
 }
 
-.admin-header-text-btn {
+.admin-header-text-btn,
+.admin-nav a.admin-header-text-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
   margin: 0;
-  padding: 0.45em 0.75em;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--hs-fg) !important;
+  padding: 0.35em 0.15em;
+  border: none;
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--hs-muted) !important;
   font: inherit;
   font-size: 0.9em;
   font-weight: 500;
@@ -1756,18 +1753,24 @@ body:has(.admin-root) {
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: none;
+  transition: color 140ms ease;
 }
 
-.admin-header-text-btn:hover {
-  background: var(--hs-soft);
+.admin-header-text-btn:hover,
+.admin-nav a.admin-header-text-btn:hover {
+  background: transparent !important;
+  color: var(--hs-fg) !important;
+  text-decoration: none;
 }
 
 .admin-header-text-btn.is-danger {
-  color: hsl(0, 65%, 45%) !important;
+  color: hsl(0, 55%, 48%) !important;
 }
 
 .admin-header-text-btn.is-danger:hover {
-  background: color-mix(in oklch, hsl(0, 65%, 45%) 10%, transparent);
+  background: transparent !important;
+  color: hsl(0, 65%, 42%) !important;
 }
 
 .admin-header-logout-form {
@@ -2934,6 +2937,7 @@ button.admin-comment-approve:hover {
 }
 
 .admin-editor-toolbar.md-toolbar {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -2992,10 +2996,152 @@ button.admin-comment-approve:hover {
   cursor: not-allowed;
 }
 
+.md-tool-btn.is-uploading,
 .md-tool-btn.is-uploading:disabled {
   opacity: 1;
-  cursor: wait;
-  color: hsl(var(--hue), 70%, 45%);
+  cursor: default;
+  color: inherit;
+}
+
+.md-tool-upload-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05em;
+}
+
+.md-tool-upload-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+}
+
+.md-tool-upload-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid color-mix(in oklch, var(--text) 18%, transparent);
+  border-top-color: hsl(var(--hue), 70%, 48%);
+  animation: md-tool-upload-spin 0.7s linear infinite;
+}
+
+.md-tool-upload-pct {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1em;
+  font-size: 0.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #1a1a1a;
+}
+
+html.dark .md-tool-upload-pct {
+  color: #fff;
+}
+
+@keyframes md-tool-upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.md-tool-upload-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hs-muted, var(--text-muted, inherit));
+  line-height: 0;
+  cursor: pointer;
+}
+
+.md-tool-upload-cancel:hover {
+  background: color-mix(in oklch, var(--text) 8%, transparent);
+  color: var(--hs-fg, var(--text));
+}
+
+.admin-upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--hs-line, color-mix(in oklch, var(--text) 12%, transparent));
+  border-radius: calc(var(--border-radius) - 1px);
+  background: var(--hs-surface, var(--hs-bg, var(--surface)));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.1);
+}
+
+/* Float under toolbar — out of document flow, no layout jump */
+.admin-upload-progress--compact {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 0.3rem);
+  inset-inline-start: 0;
+  width: min(14rem, calc(100% - 0.5rem));
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+}
+
+.admin-upload-progress-label {
+  flex-shrink: 0;
+  min-width: 2.25em;
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+  color: var(--hs-fg, var(--text));
+}
+
+.admin-upload-progress-cancel {
+  flex-shrink: 0;
+  font-size: 0.78em;
+  padding-block: 0.05em;
+}
+
+.admin-upload-progress-track {
+  flex: 1 1 auto;
+  min-width: 3.5rem;
+  height: 0.28rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 12%, transparent);
+}
+
+.admin-upload-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--hue), 55%, 45%);
+  transition: width 0.12s linear;
+}
+
+.admin-upload-error {
+  margin: 0;
+}
+
+.admin-settings-image-field {
+  position: relative;
+}
+
+.admin-settings-image-field .admin-upload-progress {
+  position: absolute;
+  z-index: 4;
+  inset-inline-start: 0;
+  top: calc(100% + 0.25rem);
+  width: min(14rem, 100%);
+  margin: 0;
 }
 
 .md-tool-sep {
@@ -3012,10 +3158,6 @@ button.admin-comment-approve:hover {
   line-height: 1.65;
   direction: rtl;
   text-align: right;
-}
-
-.admin-editor:disabled {
-  cursor: wait;
 }
 
 .admin-md-preview {

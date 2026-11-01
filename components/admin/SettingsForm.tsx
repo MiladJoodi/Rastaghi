@@ -4,9 +4,14 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveSettingsAction } from "@/app/admin/actions";
+import { UploadProgressBar } from "@/components/admin/UploadProgressBar";
 import { PendingButton } from "@/components/PendingButton";
 import { ThemeToggle } from "@/components/ThemeControls";
 import { FoldersIcon } from "@/components/lucide/FoldersIcon";
+import {
+  isUploadAborted,
+  uploadAdminMedia,
+} from "@/lib/admin-upload-client";
 import type { SettingDef } from "@/lib/settings";
 
 type SettingsFormProps = {
@@ -23,35 +28,51 @@ function SettingsImageField({
 }) {
   const inputId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const clearable = Boolean(def.clearable);
   const [url, setUrl] = useState(() =>
     clearable ? initialValue : initialValue || def.defaultValue,
   );
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadProcessing, setUploadProcessing] = useState(false);
   const [error, setError] = useState("");
   const preview = def.preview ?? "portrait";
   const previewClass = `admin-settings-image-preview admin-settings-image-preview--${preview}`;
 
+  function cancelUpload() {
+    uploadAbortRef.current?.abort();
+  }
+
   async function uploadFile(file: File) {
+    uploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+
     setUploading(true);
+    setUploadPercent(0);
+    setUploadProcessing(false);
     setError("");
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("kind", "image");
-      const res = await fetch("/api/admin/upload", {
-        method: "POST",
-        body: form,
+      const data = await uploadAdminMedia(file, "image", {
+        signal: controller.signal,
+        onProgress: (p) => {
+          setUploadPercent(p.percent);
+          if (p.percent >= 100) setUploadProcessing(true);
+        },
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || "آپلود ناموفق بود.");
-      }
       setUrl(data.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "آپلود ناموفق بود.");
+      if (!isUploadAborted(err)) {
+        setError(err instanceof Error ? err.message : "آپلود ناموفق بود.");
+      }
     } finally {
+      if (uploadAbortRef.current === controller) {
+        uploadAbortRef.current = null;
+      }
       setUploading(false);
+      setUploadPercent(0);
+      setUploadProcessing(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -135,6 +156,14 @@ function SettingsImageField({
           ) : null}
         </div>
       </div>
+      {uploading ? (
+        <UploadProgressBar
+          percent={uploadPercent}
+          processing={uploadProcessing}
+          label="آپلود تصویر…"
+          onCancel={cancelUpload}
+        />
+      ) : null}
       {error ? (
         <p className="admin-error" role="alert">
           {error}

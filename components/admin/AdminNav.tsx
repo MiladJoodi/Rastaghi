@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/admin/actions";
-import { ThemeToggle } from "@/components/ThemeControls";
 import { EyeIcon } from "@/components/lucide/EyeIcon";
 import { ImageIcon } from "@/components/lucide/ImageIcon";
 import { LogOutIcon } from "@/components/lucide/LogOutIcon";
@@ -87,7 +86,6 @@ export function AdminNav({ authed }: AdminNavProps) {
       </button>
 
       <nav className="admin-nav admin-nav-desktop" aria-label="منوی ادمین">
-        <ThemeToggle />
         <Link
           href="/"
           target="_blank"

@@ -29,7 +29,12 @@ import {
   type TextSelection,
 } from "@/lib/markdown-edit";
 import type { MediaKind } from "@/lib/cloudinary";
-import { Spinner } from "@/components/ui/spinner";
+import {
+  isUploadAborted,
+  uploadAdminMedia,
+} from "@/lib/admin-upload-client";
+import { toPersianDigits } from "@/lib/persian";
+import { XIcon } from "@/components/lucide/XIcon";
 
 type MarkdownEditorProps = {
   name?: string;
@@ -115,11 +120,17 @@ export function MarkdownEditor({
   const lastRecordAt = useRef(Date.now());
   const applyingHistory = useRef(false);
 
-  const [uploading, setUploading] = useState(false);
   const [uploadKind, setUploadKind] = useState<MediaKind | null>(null);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadProcessing, setUploadProcessing] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+
+  function cancelUpload() {
+    uploadAbortRef.current?.abort();
+  }
 
   function syncHistoryButtons() {
     setCanUndo(indexRef.current > 0);
@@ -129,6 +140,12 @@ export function MarkdownEditor({
   useEffect(() => {
     syncHistoryButtons();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once with initial value
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      uploadAbortRef.current?.abort();
+    };
   }, []);
 
   const previewHtml = useMemo(() => {
@@ -248,21 +265,22 @@ export function MarkdownEditor({
   }
 
   async function uploadMedia(file: File, kind: MediaKind) {
-    setUploading(true);
+    uploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+
     setUploadKind(kind);
+    setUploadPercent(0);
+    setUploadProcessing(false);
     setUploadError("");
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("kind", kind);
-      const res = await fetch("/api/admin/upload", {
-        method: "POST",
-        body: form,
+      const data = await uploadAdminMedia(file, kind, {
+        signal: controller.signal,
+        onProgress: (p) => {
+          setUploadPercent(p.percent);
+          if (p.percent >= 100) setUploadProcessing(true);
+        },
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || "آپلود ناموفق بود.");
-      }
       if (kind === "audio") {
         insertSnippet(`\n\n<audio controls src="${data.url}"></audio>\n\n`);
       } else if (kind === "video") {
@@ -274,12 +292,26 @@ export function MarkdownEditor({
         insertSnippet(`\n\n![${alt}](${data.url})\n\n`);
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "آپلود ناموفق بود.");
+      if (isUploadAborted(err)) {
+        setUploadError("");
+      } else {
+        setUploadError(
+          err instanceof Error ? err.message : "آپلود ناموفق بود.",
+        );
+      }
     } finally {
-      setUploading(false);
+      if (uploadAbortRef.current === controller) {
+        uploadAbortRef.current = null;
+      }
       setUploadKind(null);
+      setUploadPercent(0);
+      setUploadProcessing(false);
     }
   }
+
+  const uploadPctLabel = uploadProcessing
+    ? "…"
+    : `${toPersianDigits(Math.min(99, Math.max(0, uploadPercent)))}٪`;
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     const mod = event.metaKey || event.ctrlKey;
@@ -454,59 +486,115 @@ export function MarkdownEditor({
 
           <ToolSep />
 
-          <ToolButton
-            label={
-              uploadKind === "image" ? "در حال آپلود تصویر…" : "آپلود تصویر"
-            }
-            disabled={preview || uploading}
-            busy={uploadKind === "image"}
-            onClick={() => {
-              setUploadError("");
-              imageFileRef.current?.click();
-            }}
-          >
+          <span className="md-tool-upload-slot">
+            <ToolButton
+              label={
+                uploadKind === "image"
+                  ? `آپلود تصویر ${toPersianDigits(uploadPercent)}٪`
+                  : "آپلود تصویر"
+              }
+              disabled={preview || uploadKind === "image"}
+              busy={uploadKind === "image"}
+              onClick={() => {
+                setUploadError("");
+                imageFileRef.current?.click();
+              }}
+            >
+              {uploadKind === "image" ? (
+                <span className="md-tool-upload-ring" aria-hidden>
+                  <span className="md-tool-upload-pct">{uploadPctLabel}</span>
+                </span>
+              ) : (
+                <ImageIcon size={15} strokeWidth={1.75} aria-hidden />
+              )}
+            </ToolButton>
             {uploadKind === "image" ? (
-              <Spinner className="pending-spinner" />
-            ) : (
-              <ImageIcon size={15} strokeWidth={1.75} aria-hidden />
-            )}
-          </ToolButton>
-          <ToolButton
-            label={
-              uploadKind === "audio" ? "در حال آپلود ویس…" : "آپلود ویس / صوت"
-            }
-            disabled={preview || uploading}
-            busy={uploadKind === "audio"}
-            onClick={() => {
-              setUploadError("");
-              audioFileRef.current?.click();
-            }}
-          >
+              <button
+                type="button"
+                className="md-tool-upload-cancel"
+                aria-label="لغو آپلود"
+                onClick={cancelUpload}
+              >
+                <XIcon size={12} strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+          </span>
+
+          <span className="md-tool-upload-slot">
+            <ToolButton
+              label={
+                uploadKind === "audio"
+                  ? `آپلود صوت ${toPersianDigits(uploadPercent)}٪`
+                  : "آپلود ویس / صوت"
+              }
+              disabled={preview || uploadKind === "audio"}
+              busy={uploadKind === "audio"}
+              onClick={() => {
+                setUploadError("");
+                audioFileRef.current?.click();
+              }}
+            >
+              {uploadKind === "audio" ? (
+                <span className="md-tool-upload-ring" aria-hidden>
+                  <span className="md-tool-upload-pct">{uploadPctLabel}</span>
+                </span>
+              ) : (
+                <MicIcon size={15} strokeWidth={1.75} aria-hidden />
+              )}
+            </ToolButton>
             {uploadKind === "audio" ? (
-              <Spinner className="pending-spinner" />
-            ) : (
-              <MicIcon size={15} strokeWidth={1.75} aria-hidden />
-            )}
-          </ToolButton>
-          <ToolButton
-            label={
-              uploadKind === "video" ? "در حال آپلود ویدیو…" : "آپلود ویدیو"
-            }
-            disabled={preview || uploading}
-            busy={uploadKind === "video"}
-            onClick={() => {
-              setUploadError("");
-              videoFileRef.current?.click();
-            }}
-          >
+              <button
+                type="button"
+                className="md-tool-upload-cancel"
+                aria-label="لغو آپلود"
+                onClick={cancelUpload}
+              >
+                <XIcon size={12} strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+          </span>
+
+          <span className="md-tool-upload-slot">
+            <ToolButton
+              label={
+                uploadKind === "video"
+                  ? `آپلود ویدیو ${toPersianDigits(uploadPercent)}٪`
+                  : "آپلود ویدیو"
+              }
+              disabled={preview || uploadKind === "video"}
+              busy={uploadKind === "video"}
+              onClick={() => {
+                setUploadError("");
+                videoFileRef.current?.click();
+              }}
+            >
+              {uploadKind === "video" ? (
+                <span className="md-tool-upload-ring" aria-hidden>
+                  <span className="md-tool-upload-pct">{uploadPctLabel}</span>
+                </span>
+              ) : (
+                <VideoIcon size={15} strokeWidth={1.75} aria-hidden />
+              )}
+            </ToolButton>
             {uploadKind === "video" ? (
-              <Spinner className="pending-spinner" />
-            ) : (
-              <VideoIcon size={15} strokeWidth={1.75} aria-hidden />
-            )}
-          </ToolButton>
+              <button
+                type="button"
+                className="md-tool-upload-cancel"
+                aria-label="لغو آپلود"
+                onClick={cancelUpload}
+              >
+                <XIcon size={12} strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+          </span>
         </div>
       </div>
+
+      {uploadError ? (
+        <p className="admin-error admin-upload-error" role="alert">
+          {uploadError}
+        </p>
+      ) : null}
 
       <input
         ref={imageFileRef}
@@ -574,15 +662,7 @@ export function MarkdownEditor({
         className="admin-editor"
         spellCheck
         hidden={preview}
-        disabled={uploading}
-        aria-busy={uploading || undefined}
       />
-
-      {uploadError ? (
-        <p className="admin-error" role="alert">
-          {uploadError}
-        </p>
-      ) : null}
     </div>
   );
 }
